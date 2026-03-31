@@ -53,7 +53,9 @@ export class MailService {
         text: parsed.text,
         subject: parsed.subject,
         from: parsed.from?.text,
-        date: parsed.date
+        date: parsed.date,
+        messageId: parsed.messageId,
+        references: parsed.references
       };
     } finally {
       lock.release();
@@ -104,7 +106,7 @@ export class MailService {
     }
   }
 
-  static async sendMail(accountId: number, vaultKey: string, to: string, subject: string, body: string): Promise<any> {
+  static async sendMail(accountId: number, vaultKey: string, to: string, subject: string, body: string, inReplyTo?: string, references?: string | string[]): Promise<any> {
     const account = await db('accounts').where({ id: accountId }).first();
     if (!account) throw new Error('Account not found');
 
@@ -113,7 +115,7 @@ export class MailService {
     const transporter = nodemailer.createTransport({
       host: account.smtp_host,
       port: account.smtp_port,
-      secure: account.smtp_port === 465, // True for 465, false for 587/25
+      secure: account.smtp_port === 465,
       auth: {
         user: account.email,
         pass: password
@@ -128,7 +130,9 @@ export class MailService {
       to,
       subject,
       html: body,
-      text: body.replace(/<[^>]*>?/gm, '') // Crude text fallback
+      text: body.replace(/<[^>]*>?/gm, ''),
+      inReplyTo,
+      references
     });
 
     return info;
