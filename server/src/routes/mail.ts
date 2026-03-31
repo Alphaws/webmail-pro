@@ -11,5 +11,6 @@ router.get('/body', authMiddleware, MailController.body);
 router.post('/delete', authMiddleware, MailController.delete);
 router.post('/archive', authMiddleware, MailController.archive);
 router.post('/toggle-seen', authMiddleware, MailController.toggleSeen);
+router.post('/send', authMiddleware, MailController.send);
 
 export default router;

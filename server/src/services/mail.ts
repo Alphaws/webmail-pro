@@ -2,6 +2,8 @@ import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
 import { ImapPool } from './imap-pool';
+import { Vault } from '../utils/vault';
+import db from '../database/db';
 
 export class MailService {
   static async listFolders(accountId: number, vaultKey: string): Promise<any> {
@@ -23,8 +25,6 @@ export class MailService {
       const start = Math.max(1, end - 19);
       
       for await (let message of client.fetch(`${start}:${end}`, { envelope: true, flags: true, size: true })) {
-        // imapflow returns flags as a Set and modseq as BigInt
-        // We must convert them for JSON serialization
         const serializedMessage = {
           ...message,
           flags: message.flags ? Array.from(message.flags) : [],
@@ -102,5 +102,35 @@ export class MailService {
     } finally {
       lock.release();
     }
+  }
+
+  static async sendMail(accountId: number, vaultKey: string, to: string, subject: string, body: string): Promise<any> {
+    const account = await db('accounts').where({ id: accountId }).first();
+    if (!account) throw new Error('Account not found');
+
+    const password = Vault.decrypt(account.encrypted_password, vaultKey);
+
+    const transporter = nodemailer.createTransport({
+      host: account.smtp_host,
+      port: account.smtp_port,
+      secure: account.smtp_port === 465, // True for 465, false for 587/25
+      auth: {
+        user: account.email,
+        pass: password
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+
+    const info = await transporter.sendMail({
+      from: `"${account.display_name || account.email}" <${account.email}>`,
+      to,
+      subject,
+      html: body,
+      text: body.replace(/<[^>]*>?/gm, '') // Crude text fallback
+    });
+
+    return info;
   }
 }

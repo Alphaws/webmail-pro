@@ -89,4 +89,17 @@ export class MailController {
       res.status(500).json({ message: error.message });
     }
   }
+
+  static async send(req: Request, res: Response): Promise<any> {
+    const { accountId, vaultKey, to, subject, body } = req.body;
+    if (!accountId || !vaultKey || !to) return res.status(400).json({ message: 'accountId, vaultKey and recipient (to) required' });
+
+    try {
+      const info = await MailService.sendMail(Number(accountId), String(vaultKey), to, subject, body);
+      res.json({ message: 'Email sent successfully', messageId: info.messageId });
+    } catch (error: any) {
+      console.error('Send mail error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  }
 }

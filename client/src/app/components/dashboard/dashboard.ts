@@ -42,6 +42,12 @@ import { FormsModule } from '@angular/forms';
     <aside class="folder-sidebar">
       <div class="sidebar-header">Intelligence</div>
       
+      <div class="sidebar-actions">
+        <button class="compose-btn milled-button" (click)="openCompose()">
+          <span class="material-symbols-outlined">edit</span> COMPOSE
+        </button>
+      </div>
+
       <nav class="nav-list">
         <div 
           *ngFor="let folder of folders" 
@@ -113,8 +119,8 @@ import { FormsModule } from '@angular/forms';
           </div>
           <div style="flex: 1"></div>
           <div class="tool-group">
-            <button class="tool-btn"><span class="material-symbols-outlined">chevron_left</span></button>
-            <button class="tool-btn"><span class="material-symbols-outlined">chevron_right</span></button>
+            <button class="tool-btn" (click)="prevMessage()"><span class="material-symbols-outlined">chevron_left</span></button>
+            <button class="tool-btn" (click)="nextMessage()"><span class="material-symbols-outlined">chevron_right</span></button>
           </div>
         </div>
 
@@ -138,7 +144,7 @@ import { FormsModule } from '@angular/forms';
                   <span class="message-date">{{ selectedMessage.envelope.date | date:'MMM d, y, h:mm a' }}</span>
                   <div class="meta-actions">
                     <button class="tool-btn mini"><span class="material-symbols-outlined">star</span></button>
-                    <button class="tool-btn mini"><span class="material-symbols-outlined">reply</span></button>
+                    <button class="tool-btn mini" (click)="reply()"><span class="material-symbols-outlined">reply</span></button>
                     <button class="tool-btn mini"><span class="material-symbols-outlined">more_vert</span></button>
                   </div>
                 </div>
@@ -154,8 +160,8 @@ import { FormsModule } from '@angular/forms';
             <div [innerHTML]="safeBody" class="html-content-v2"></div>
             
             <div class="reply-placeholder">
-              <button class="milled-button"><span class="material-symbols-outlined">reply</span> Reply</button>
-              <button class="milled-button" style="margin-left: 12px;"><span class="material-symbols-outlined">forward</span> Forward</button>
+              <button class="milled-button" (click)="reply()"><span class="material-symbols-outlined">reply</span> Reply</button>
+              <button class="milled-button" style="margin-left: 12px;" (click)="forward()"><span class="material-symbols-outlined">forward</span> Forward</button>
             </div>
           </article>
 
@@ -186,6 +192,31 @@ import { FormsModule } from '@angular/forms';
         </div>
       </div>
     </main>
+
+    <!-- Compose Modal -->
+    <div class="compose-modal milled-container" *ngIf="showCompose">
+      <div class="compose-header">
+        <span>New Transmission</span>
+        <div style="flex: 1"></div>
+        <button class="tool-btn" (click)="showCompose = false"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="compose-body">
+        <div class="compose-row">
+          <input type="text" [(ngModel)]="composeData.to" placeholder="Recipients">
+        </div>
+        <div class="compose-row">
+          <input type="text" [(ngModel)]="composeData.subject" placeholder="Subject">
+        </div>
+        <textarea [(ngModel)]="composeData.body" placeholder="Establish connection message..."></textarea>
+      </div>
+      <div class="compose-footer">
+        <button class="milled-button primary-btn" [disabled]="sending" (click)="sendMail()">
+          {{ sending ? 'TRANSMITTING...' : 'SEND' }}
+        </button>
+        <div style="flex: 1"></div>
+        <button class="tool-btn" (click)="showCompose = false"><span class="material-symbols-outlined">delete</span></button>
+      </div>
+    </div>
 
     <!-- Account Modal -->
     <div class="modal-overlay" *ngIf="showAddModal || editingAcc">
@@ -286,6 +317,9 @@ import { FormsModule } from '@angular/forms';
     .account-icon:hover { border-color: var(--accent-gold-muted); transform: scale(1.05); opacity: 1; }
     .folder-sidebar { width: 240px; background: var(--bg-sidebar); border-right: 1px solid var(--border-milled); display: flex; flex-direction: column; }
     .sidebar-header { padding: 24px; font-weight: 800; letter-spacing: 2px; color: var(--accent-gold); text-transform: uppercase; font-size: 12px; }
+    .sidebar-actions { padding: 0 16px 24px 16px; }
+    .compose-btn { width: 100%; padding: 14px; background: var(--bg-container); border-color: var(--accent-gold-muted); color: var(--accent-gold); font-size: 11px; letter-spacing: 2px; }
+    .compose-btn:hover { background: var(--bg-hover); border-color: var(--accent-gold); }
     .sidebar-footer { padding: 16px; border-top: 1px solid var(--border-milled); }
     .nav-list { flex: 1; overflow-y: auto; }
     .nav-item { padding: 12px 24px; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; gap: 12px; font-size: 13px; transition: all 0.2s; }
@@ -336,6 +370,15 @@ import { FormsModule } from '@angular/forms';
     .message-body-v2 { padding: 32px; max-width: 900px; }
     .html-content-v2 { background: #fff; color: #000; padding: 24px; border-radius: 8px; min-height: 200px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
     .reply-placeholder { margin-top: 32px; display: flex; gap: 12px; }
+    
+    .compose-modal { position: fixed; bottom: 0; right: 80px; width: 500px; height: 600px; background: #1a1a1a; border: 1px solid var(--border-milled); border-radius: 12px 12px 0 0; z-index: 2000; display: flex; flex-direction: column; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
+    .compose-header { padding: 12px 16px; background: #000; border-radius: 12px 12px 0 0; display: flex; align-items: center; font-size: 13px; font-weight: 700; color: var(--accent-gold); letter-spacing: 1px; }
+    .compose-body { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+    .compose-row { border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .compose-row input { width: 100%; background: transparent; border: none; padding: 12px 0; color: #fff; outline: none; }
+    .compose-body textarea { flex: 1; background: transparent; border: none; color: #fff; outline: none; resize: none; font-size: 14px; line-height: 1.6; padding-top: 16px; }
+    .compose-footer { padding: 16px; display: flex; align-items: center; border-top: 1px solid rgba(255,255,255,0.05); }
+
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 1000; display: flex; align-items: center; justify-content: center; }
     .modal { width: 500px; padding: 32px; }
     .modal h2 { margin-bottom: 24px; color: var(--accent-gold); font-size: 18px; text-transform: uppercase; letter-spacing: 2px; }
@@ -370,6 +413,10 @@ export class DashboardComponent implements OnInit {
   securityLoading = false;
   securityError = '';
   securityForm = { oldPassword: '', newPassword: '', confirmPassword: '' };
+
+  showCompose = false;
+  sending = false;
+  composeData = { to: '', subject: '', body: '' };
 
   constructor(
     private http: HttpClient, 
@@ -423,6 +470,16 @@ export class DashboardComponent implements OnInit {
       this.toggleSeen(msg.uid, true);
     }
     this.cdr.detectChanges();
+  }
+
+  prevMessage() {
+    const idx = this.messages.findIndex(m => m.uid === this.selectedMessage.uid);
+    if (idx > 0) this.selectMessage(this.messages[idx - 1]);
+  }
+
+  nextMessage() {
+    const idx = this.messages.findIndex(m => m.uid === this.selectedMessage.uid);
+    if (idx < this.messages.length - 1) this.selectMessage(this.messages[idx + 1]);
   }
 
   editAccount(acc: any) {
@@ -487,6 +544,55 @@ export class DashboardComponent implements OnInit {
       error: (err) => {
         this.securityError = err.error.message || 'Failed to update key';
         this.securityLoading = false;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  openCompose() {
+    this.composeData = { to: '', subject: '', body: '' };
+    this.showCompose = true;
+    this.cdr.detectChanges();
+  }
+
+  reply() {
+    this.composeData = {
+      to: this.selectedMessage.envelope.from[0].address,
+      subject: 'Re: ' + this.selectedMessage.envelope.subject,
+      body: '\\n\\n--- Original Message ---\\n' + this.selectedMessage.envelope.from[0].address + ' wrote:\\n'
+    };
+    this.showCompose = true;
+    this.cdr.detectChanges();
+  }
+
+  forward() {
+    this.composeData = {
+      to: '',
+      subject: 'Fwd: ' + this.selectedMessage.envelope.subject,
+      body: '\\n\\n--- Forwarded Message ---\\nSubject: ' + this.selectedMessage.envelope.subject + '\\n'
+    };
+    this.showCompose = true;
+    this.cdr.detectChanges();
+  }
+
+  sendMail() {
+    if (!this.composeData.to) return;
+    this.sending = true;
+    const vaultKey = sessionStorage.getItem('vault_key');
+    this.http.post('/api/mail/send', {
+      accountId: this.selectedAccount.id,
+      vaultKey,
+      ...this.composeData
+    }, { headers: this.getHeaders() }).subscribe({
+      next: () => {
+        this.sending = false;
+        this.showCompose = false;
+        alert('Transmission sent successfully.');
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.sending = false;
+        alert('Transmission failed: ' + (err.error.message || 'Unknown error'));
         this.cdr.detectChanges();
       }
     });
