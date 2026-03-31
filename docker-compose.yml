@@ -3,14 +3,14 @@ services:
     image: postgres:16-alpine
     container_name: webmail-db
     restart: unless-stopped
-    networks:
-      - webmail-net
-    volumes:
-      - webmail-db-data:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=\${DB_USER}
       - POSTGRES_PASSWORD=\${DB_PASSWORD}
       - POSTGRES_DB=\${DB_NAME}
+    volumes:
+      - webmail-db-data:/var/lib/postgresql/data
+    networks:
+      - webmail-net
 
   webmail-server:
     build: ./server
@@ -47,6 +47,7 @@ services:
       - "traefik.http.routers.webmail-pro.rule=Host(\`\${WEBMAIL_DOMAIN}\`)"
       - "traefik.http.routers.webmail-pro.entrypoints=websecure"
       - "traefik.http.routers.webmail-pro.tls=true"
+      - "traefik.http.routers.webmail-pro.tls.certresolver=myresolver"
       - "traefik.docker.network=traefik"
     environment:
       - BACKEND_URL=http://webmail-server:3000
