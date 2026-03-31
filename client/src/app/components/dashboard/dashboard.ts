@@ -76,6 +76,7 @@ import { FormsModule } from '@angular/forms';
           *ngFor="let msg of messages" 
           class="email-item"
           [class.active]="selectedMessage?.uid === msg.uid"
+          [class.unread]="!msg.flags?.includes('\\\\Seen')"
           (click)="selectMessage(msg)"
         >
           <div class="email-header">
@@ -98,13 +99,15 @@ import { FormsModule } from '@angular/forms';
         <!-- GMAIL-LIKE TOOLBAR -->
         <div class="message-toolbar">
           <div class="tool-group">
-            <button class="tool-btn" title="Archive"><span class="material-symbols-outlined">archive</span></button>
+            <button class="tool-btn" title="Archive" (click)="archiveMessage(selectedMessage.uid)"><span class="material-symbols-outlined">archive</span></button>
             <button class="tool-btn" title="Report Spam"><span class="material-symbols-outlined">report</span></button>
-            <button class="tool-btn" title="Delete"><span class="material-symbols-outlined">delete</span></button>
+            <button class="tool-btn" title="Delete" (click)="deleteMessage(selectedMessage.uid)"><span class="material-symbols-outlined">delete</span></button>
           </div>
           <div class="tool-divider"></div>
           <div class="tool-group">
-            <button class="tool-btn" title="Mark as unread"><span class="material-symbols-outlined">mark_as_unread</span></button>
+            <button class="tool-btn" [title]="selectedMessage.flags?.includes('\\\\Seen') ? 'Mark as unread' : 'Mark as read'" (click)="toggleSeen(selectedMessage.uid, !selectedMessage.flags?.includes('\\\\Seen'))">
+              <span class="material-symbols-outlined">{{ selectedMessage.flags?.includes('\\\\Seen') ? 'mark_as_unread' : 'drafts' }}</span>
+            </button>
             <button class="tool-btn" title="Move to"><span class="material-symbols-outlined">drive_file_move</span></button>
             <button class="tool-btn" title="Labels"><span class="material-symbols-outlined">label</span></button>
           </div>
@@ -120,7 +123,7 @@ import { FormsModule } from '@angular/forms';
             <div class="subject-line">
               <h1 class="message-subject">{{ selectedMessage.envelope.subject }}</h1>
               <span class="material-symbols-outlined icon-label">label_important</span>
-              <span class="folder-tag">Inbox</span>
+              <span class="folder-tag">{{ selectedFolder }}</span>
             </div>
             
             <div class="sender-info-v2">
@@ -297,13 +300,15 @@ import { FormsModule } from '@angular/forms';
     .email-item { padding: 16px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.03); cursor: pointer; transition: all 0.2s; }
     .email-item:hover { background: rgba(255, 255, 255, 0.02); }
     .email-item.active { background: var(--bg-hover); border-left: 3px solid var(--accent-gold); }
+    .email-item.unread { border-left: 3px solid var(--accent-gold); }
+    .email-item.unread .email-sender { color: var(--text-primary); font-weight: 800; }
+    .email-item.unread .email-subject { color: var(--text-primary); font-weight: 600; }
     .email-item.error { color: #f87171; text-align: center; font-size: 11px; }
     .email-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
-    .email-sender { font-weight: 600; font-size: 13px; }
+    .email-sender { font-weight: 600; font-size: 13px; color: var(--text-secondary); }
     .email-time { font-size: 11px; color: var(--text-muted); }
     .email-subject { font-size: 13px; color: var(--accent-gold-muted); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .email-preview { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
     .message-view { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); overflow: hidden; }
     .message-toolbar { height: 48px; border-bottom: 1px solid var(--border-milled); display: flex; align-items: center; padding: 0 16px; gap: 8px; background: rgba(0,0,0,0.2); }
     .tool-group { display: flex; align-items: center; gap: 4px; }
@@ -313,14 +318,12 @@ import { FormsModule } from '@angular/forms';
     .tool-btn .material-symbols-outlined { font-size: 20px; }
     .tool-btn.mini { width: 28px; height: 28px; }
     .tool-btn.mini .material-symbols-outlined { font-size: 18px; }
-
     .message-content-scroll { flex: 1; overflow-y: auto; }
     .message-header-v2 { padding: 24px 32px; border-bottom: 1px solid rgba(255,255,255,0.03); }
     .subject-line { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
     .subject-line h1 { font-size: 22px; font-weight: 400; color: var(--text-primary); font-family: 'Inter', sans-serif; flex: 1; }
     .icon-label { color: var(--text-muted); font-size: 20px; }
     .folder-tag { background: #3c4043; color: #e8eaed; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 500; }
-
     .sender-info-v2 { display: flex; gap: 12px; align-items: flex-start; }
     .sender-avatar-v2 { width: 40px; height: 40px; border-radius: 50%; background: #5c6bc0; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
     .meta-body { flex: 1; }
@@ -330,11 +333,9 @@ import { FormsModule } from '@angular/forms';
     .message-date { font-size: 12px; color: var(--text-secondary); margin-right: 12px; }
     .meta-actions { display: flex; gap: 4px; }
     .meta-row-2 { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
-
     .message-body-v2 { padding: 32px; max-width: 900px; }
     .html-content-v2 { background: #fff; color: #000; padding: 24px; border-radius: 8px; min-height: 200px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
     .reply-placeholder { margin-top: 32px; display: flex; gap: 12px; }
-
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 1000; display: flex; align-items: center; justify-content: center; }
     .modal { width: 500px; padding: 32px; }
     .modal h2 { margin-bottom: 24px; color: var(--accent-gold); font-size: 18px; text-transform: uppercase; letter-spacing: 2px; }
@@ -418,6 +419,10 @@ export class DashboardComponent implements OnInit {
   selectMessage(msg: any) {
     this.selectedMessage = msg;
     this.loadMessageBody(msg.uid);
+    // Auto mark as read if unread
+    if (!msg.flags?.includes('\\\\Seen')) {
+      this.toggleSeen(msg.uid, true);
+    }
     this.cdr.detectChanges();
   }
 
@@ -438,30 +443,26 @@ export class DashboardComponent implements OnInit {
   saveAccount() {
     const vaultKey = sessionStorage.getItem('vault_key');
     const payload = { ...this.accForm, vault_key: vaultKey };
-    
     if (this.editingAcc) {
-      this.http.put('/api/accounts/' + this.editingAcc.id, payload, { headers: this.getHeaders() })
-        .subscribe(() => {
-          this.loadAccounts();
-          this.closeModal();
-        });
+      this.http.put('/api/accounts/' + this.editingAcc.id, payload, { headers: this.getHeaders() }).subscribe(() => {
+        this.loadAccounts();
+        this.closeModal();
+      });
     } else {
-      this.http.post('/api/accounts', payload, { headers: this.getHeaders() })
-        .subscribe(() => {
-          this.loadAccounts();
-          this.closeModal();
-        });
+      this.http.post('/api/accounts', payload, { headers: this.getHeaders() }).subscribe(() => {
+        this.loadAccounts();
+        this.closeModal();
+      });
     }
   }
 
   deleteAccount() {
     if (confirm('Permanently disconnect this identity?')) {
-      this.http.delete('/api/accounts/' + this.editingAcc.id, { headers: this.getHeaders() })
-        .subscribe(() => {
-          this.selectedAccount = null;
-          this.loadAccounts();
-          this.closeModal();
-        });
+      this.http.delete('/api/accounts/' + this.editingAcc.id, { headers: this.getHeaders() }).subscribe(() => {
+        this.selectedAccount = null;
+        this.loadAccounts();
+        this.closeModal();
+      });
     }
   }
 
@@ -470,10 +471,8 @@ export class DashboardComponent implements OnInit {
       this.securityError = 'New passwords do not match';
       return;
     }
-
     this.securityLoading = true;
     this.securityError = '';
-
     this.http.post<any>('/api/auth/change-password', {
       oldPassword: this.securityForm.oldPassword,
       newPassword: this.securityForm.newPassword
@@ -494,6 +493,55 @@ export class DashboardComponent implements OnInit {
     });
   }
 
+  // --- MAIL OPERATIONS ---
+
+  deleteMessage(uid: string) {
+    if (!confirm('Move transmission to trash?')) return;
+    const vaultKey = sessionStorage.getItem('vault_key');
+    this.http.post('/api/mail/delete', {
+      accountId: this.selectedAccount.id,
+      vaultKey,
+      folder: this.selectedFolder,
+      uid
+    }, { headers: this.getHeaders() }).subscribe(() => {
+      this.selectedMessage = null;
+      this.loadMessages(this.selectedAccount.id, this.selectedFolder);
+    });
+  }
+
+  archiveMessage(uid: string) {
+    const vaultKey = sessionStorage.getItem('vault_key');
+    this.http.post('/api/mail/archive', {
+      accountId: this.selectedAccount.id,
+      vaultKey,
+      folder: this.selectedFolder,
+      uid
+    }, { headers: this.getHeaders() }).subscribe(() => {
+      this.selectedMessage = null;
+      this.loadMessages(this.selectedAccount.id, this.selectedFolder);
+    });
+  }
+
+  toggleSeen(uid: string, seen: boolean) {
+    const vaultKey = sessionStorage.getItem('vault_key');
+    this.http.post('/api/mail/toggle-seen', {
+      accountId: this.selectedAccount.id,
+      vaultKey,
+      folder: this.selectedFolder,
+      uid,
+      seen
+    }, { headers: this.getHeaders() }).subscribe(() => {
+      // Update local state without full reload
+      const msg = this.messages.find(m => m.uid === uid);
+      if (msg) {
+        if (!msg.flags) msg.flags = [];
+        if (seen && !msg.flags.includes('\\\\Seen')) msg.flags.push('\\\\Seen');
+        if (!seen) msg.flags = msg.flags.filter((f: string) => f !== '\\\\Seen');
+      }
+      this.cdr.detectChanges();
+    });
+  }
+
   onAccountContextMenu(event: MouseEvent, acc: any) {
     event.preventDefault();
     this.editAccount(acc);
@@ -503,8 +551,7 @@ export class DashboardComponent implements OnInit {
     this.loadingBody = true;
     this.safeBody = '';
     const vaultKey = sessionStorage.getItem('vault_key');
-    
-    this.http.get<any>(`/api/mail/body?accountId=${this.selectedAccount.id}&vaultKey=${vaultKey}&folder=${this.selectedFolder}&uid=${uid}`, { headers: this.getHeaders() })
+    this.http.get<any>(\`/api/mail/body?accountId=\${this.selectedAccount.id}&vaultKey=\${vaultKey}&folder=\${this.selectedFolder}&uid=\${uid}\`, { headers: this.getHeaders() })
       .subscribe({
         next: (data) => {
           this.safeBody = this.sanitizer.bypassSecurityTrustHtml(data.html || data.text);
@@ -533,7 +580,6 @@ export class DashboardComponent implements OnInit {
     this.syncError = false;
     this.folders = [];
     const vaultKey = sessionStorage.getItem('vault_key');
-    
     this.http.get<any[]>('/api/mail/folders?accountId=' + accountId + '&vaultKey=' + vaultKey, { headers: this.getHeaders() })
       .subscribe({
         next: (data) => {
@@ -548,9 +594,7 @@ export class DashboardComponent implements OnInit {
         },
         error: (err) => {
           this.loadingFolders = false;
-          if (err.status === 401) {
-            this.syncError = true;
-          }
+          if (err.status === 401) this.syncError = true;
           this.cdr.detectChanges();
         }
       });
@@ -560,7 +604,6 @@ export class DashboardComponent implements OnInit {
     this.loadingMessages = true;
     this.messages = [];
     const vaultKey = sessionStorage.getItem('vault_key');
-
     this.http.get<any[]>('/api/mail/messages?accountId=' + accountId + '&vaultKey=' + vaultKey + '&folder=' + folder, { headers: this.getHeaders() })
       .subscribe({
         next: (data) => {
@@ -570,9 +613,7 @@ export class DashboardComponent implements OnInit {
         },
         error: (err) => {
           this.loadingMessages = false;
-          if (err.status === 401) {
-            this.syncError = true;
-          }
+          if (err.status === 401) this.syncError = true;
           this.cdr.detectChanges();
         }
       });
