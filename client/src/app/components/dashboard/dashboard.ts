@@ -29,8 +29,8 @@ import { FormsModule } from '@angular/forms';
 
       <div style="flex: 1"></div>
 
-      <div class="account-icon" (click)="showSecurityModal = true" title="Security Settings">
-        <span class="material-symbols-outlined">security</span>
+      <div class="account-icon" (click)="showSecurityModal = true" title="Master Security Settings">
+        <span class="material-symbols-outlined">shield</span>
       </div>
 
       <div class="account-icon" (click)="logout()" title="Logout">
@@ -40,7 +40,7 @@ import { FormsModule } from '@angular/forms';
 
     <!-- Folder Sidebar -->
     <aside class="folder-sidebar">
-      <div class="sidebar-header">Intelligence</div>
+      <div class="sidebar-header">Intelligence v1.1</div>
       
       <div class="sidebar-actions">
         <button class="compose-btn milled-button" (click)="openCompose()">
@@ -370,7 +370,6 @@ import { FormsModule } from '@angular/forms';
     .message-body-v2 { padding: 32px; max-width: 900px; }
     .html-content-v2 { background: #fff; color: #000; padding: 24px; border-radius: 8px; min-height: 200px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
     .reply-placeholder { margin-top: 32px; display: flex; gap: 12px; }
-    
     .compose-modal { position: fixed; bottom: 0; right: 80px; width: 500px; height: 600px; background: #1a1a1a; border: 1px solid var(--border-milled); border-radius: 12px 12px 0 0; z-index: 2000; display: flex; flex-direction: column; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
     .compose-header { padding: 12px 16px; background: #000; border-radius: 12px 12px 0 0; display: flex; align-items: center; font-size: 13px; font-weight: 700; color: var(--accent-gold); letter-spacing: 1px; }
     .compose-body { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
@@ -378,7 +377,6 @@ import { FormsModule } from '@angular/forms';
     .compose-row input { width: 100%; background: transparent; border: none; padding: 12px 0; color: #fff; outline: none; }
     .compose-body textarea { flex: 1; background: transparent; border: none; color: #fff; outline: none; resize: none; font-size: 14px; line-height: 1.6; padding-top: 16px; }
     .compose-footer { padding: 16px; display: flex; align-items: center; border-top: 1px solid rgba(255,255,255,0.05); }
-
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 1000; display: flex; align-items: center; justify-content: center; }
     .modal { width: 500px; padding: 32px; }
     .modal h2 { margin-bottom: 24px; color: var(--accent-gold); font-size: 18px; text-transform: uppercase; letter-spacing: 2px; }
@@ -399,35 +397,24 @@ export class DashboardComponent implements OnInit {
   messages: any[] = [];
   selectedMessage: any = null;
   safeBody: SafeHtml = '';
-  
   loadingFolders = false;
   loadingMessages = false;
   loadingBody = false;
   syncError = false;
-
   showAddModal = false;
   editingAcc: any = null;
   accForm: any = { email: '', display_name: '', imap_host: '', imap_port: 993, smtp_host: '', smtp_port: 587, password: '' };
-
   showSecurityModal = false;
   securityLoading = false;
   securityError = '';
   securityForm = { oldPassword: '', newPassword: '', confirmPassword: '' };
-
   showCompose = false;
   sending = false;
   composeData = { to: '', subject: '', body: '' };
 
-  constructor(
-    private http: HttpClient, 
-    private router: Router, 
-    private cdr: ChangeDetectorRef,
-    private sanitizer: DomSanitizer
-  ) {}
+  constructor(private http: HttpClient, private router: Router, private cdr: ChangeDetectorRef, private sanitizer: DomSanitizer) {}
 
-  ngOnInit() {
-    this.loadAccounts();
-  }
+  ngOnInit() { this.loadAccounts(); }
 
   getHeaders() {
     const token = localStorage.getItem('webmail_token');
@@ -658,7 +645,7 @@ export class DashboardComponent implements OnInit {
     this.loadingBody = true;
     this.safeBody = '';
     const vaultKey = sessionStorage.getItem('vault_key');
-    this.http.get<any>(`/api/mail/body?accountId=${this.selectedAccount.id}&vaultKey=${vaultKey}&folder=${this.selectedFolder}&uid=${uid}`, { headers: this.getHeaders() })
+    this.http.get<any>(\`/api/mail/body?accountId=\${this.selectedAccount.id}&vaultKey=\${vaultKey}&folder=\${this.selectedFolder}&uid=\${uid}\`, { headers: this.getHeaders() })
       .subscribe({
         next: (data) => {
           this.safeBody = this.sanitizer.bypassSecurityTrustHtml(data.html || data.text);
