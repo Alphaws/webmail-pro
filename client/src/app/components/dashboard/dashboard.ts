@@ -95,33 +95,70 @@ import { FormsModule } from '@angular/forms';
     <!-- Message Detail -->
     <main class="message-view">
       <ng-container *ngIf="selectedMessage">
-        <header class="message-header">
-          <h1 class="message-subject">{{ selectedMessage.envelope.subject }}</h1>
-          <div class="message-meta">
-            <div class="sender-info">
-              <div class="sender-avatar">{{ selectedMessage.envelope.from[0].address[0].toUpperCase() }}</div>
-              <div class="sender-details">
-                <div class="name">{{ selectedMessage.envelope.from[0].name || selectedMessage.envelope.from[0].address }}</div>
-                <div class="email">{{ selectedMessage.envelope.from[0].address }}</div>
+        <!-- GMAIL-LIKE TOOLBAR -->
+        <div class="message-toolbar">
+          <div class="tool-group">
+            <button class="tool-btn" title="Archive"><span class="material-symbols-outlined">archive</span></button>
+            <button class="tool-btn" title="Report Spam"><span class="material-symbols-outlined">report</span></button>
+            <button class="tool-btn" title="Delete"><span class="material-symbols-outlined">delete</span></button>
+          </div>
+          <div class="tool-divider"></div>
+          <div class="tool-group">
+            <button class="tool-btn" title="Mark as unread"><span class="material-symbols-outlined">mark_as_unread</span></button>
+            <button class="tool-btn" title="Move to"><span class="material-symbols-outlined">drive_file_move</span></button>
+            <button class="tool-btn" title="Labels"><span class="material-symbols-outlined">label</span></button>
+          </div>
+          <div style="flex: 1"></div>
+          <div class="tool-group">
+            <button class="tool-btn"><span class="material-symbols-outlined">chevron_left</span></button>
+            <button class="tool-btn"><span class="material-symbols-outlined">chevron_right</span></button>
+          </div>
+        </div>
+
+        <div class="message-content-scroll">
+          <header class="message-header-v2">
+            <div class="subject-line">
+              <h1 class="message-subject">{{ selectedMessage.envelope.subject }}</h1>
+              <span class="material-symbols-outlined icon-label">label_important</span>
+              <span class="folder-tag">Inbox</span>
+            </div>
+            
+            <div class="sender-info-v2">
+              <div class="sender-avatar-v2">{{ selectedMessage.envelope.from[0].address[0].toUpperCase() }}</div>
+              <div class="meta-body">
+                <div class="meta-row-1">
+                  <div class="sender-name-group">
+                    <span class="sender-name">{{ selectedMessage.envelope.from[0].name || selectedMessage.envelope.from[0].address }}</span>
+                    <span class="sender-email">&lt;{{ selectedMessage.envelope.from[0].address }}&gt;</span>
+                  </div>
+                  <div style="flex: 1"></div>
+                  <span class="message-date">{{ selectedMessage.envelope.date | date:'MMM d, y, h:mm a' }}</span>
+                  <div class="meta-actions">
+                    <button class="tool-btn mini"><span class="material-symbols-outlined">star</span></button>
+                    <button class="tool-btn mini"><span class="material-symbols-outlined">reply</span></button>
+                    <button class="tool-btn mini"><span class="material-symbols-outlined">more_vert</span></button>
+                  </div>
+                </div>
+                <div class="meta-row-2">
+                  <span class="to-label">to me</span>
+                  <span class="material-symbols-outlined" style="font-size: 14px; cursor: pointer;">arrow_drop_down</span>
+                </div>
               </div>
             </div>
-            <div class="actions">
-              <button class="milled-button">
-                <span class="material-symbols-outlined">archive</span> Archive
-              </button>
-              <button class="milled-button" style="margin-left: 8px;">
-                <span class="material-symbols-outlined">delete</span>
-              </button>
+          </header>
+          
+          <article class="message-body-v2" *ngIf="!loadingBody">
+            <div [innerHTML]="safeBody" class="html-content-v2"></div>
+            
+            <div class="reply-placeholder">
+              <button class="milled-button"><span class="material-symbols-outlined">reply</span> Reply</button>
+              <button class="milled-button" style="margin-left: 12px;"><span class="material-symbols-outlined">forward</span> Forward</button>
             </div>
-          </div>
-        </header>
-        
-        <article class="message-body" *ngIf="!loadingBody">
-          <div [innerHTML]="safeBody" class="html-content"></div>
-        </article>
+          </article>
 
-        <div class="body-loading" *ngIf="loadingBody">
-          <div class="milled-container" style="padding: 20px;">Decrypting transmission...</div>
+          <div class="body-loading" *ngIf="loadingBody">
+            <div class="milled-container" style="padding: 20px;">Decrypting transmission...</div>
+          </div>
         </div>
       </ng-container>
 
@@ -266,16 +303,38 @@ import { FormsModule } from '@angular/forms';
     .email-time { font-size: 11px; color: var(--text-muted); }
     .email-subject { font-size: 13px; color: var(--accent-gold-muted); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .email-preview { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .message-view { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); }
-    .message-header { padding: 32px; border-bottom: 1px solid var(--border-milled); }
-    .message-subject { font-size: 24px; font-weight: 800; margin-bottom: 24px; color: var(--accent-gold); font-family: 'Manrope', sans-serif; }
-    .message-meta { display: flex; justify-content: space-between; align-items: center; }
-    .sender-info { display: flex; align-items: center; gap: 12px; }
-    .sender-avatar { width: 40px; height: 40px; border-radius: 4px; background: linear-gradient(135deg, var(--bg-container), var(--bg-main)); border: 1px solid var(--border-milled); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent-gold); }
-    .sender-details .name { font-weight: 600; font-size: 14px; }
-    .sender-details .email { font-size: 12px; color: var(--text-muted); }
-    .message-body { padding: 40px; line-height: 1.6; color: #d0d0d0; flex: 1; overflow-y: auto; }
-    .html-content { background: #fff; color: #000; padding: 20px; border-radius: 4px; }
+
+    .message-view { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); overflow: hidden; }
+    .message-toolbar { height: 48px; border-bottom: 1px solid var(--border-milled); display: flex; align-items: center; padding: 0 16px; gap: 8px; background: rgba(0,0,0,0.2); }
+    .tool-group { display: flex; align-items: center; gap: 4px; }
+    .tool-divider { width: 1px; height: 20px; background: var(--border-milled); margin: 0 8px; }
+    .tool-btn { background: transparent; border: none; color: var(--text-secondary); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; }
+    .tool-btn:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+    .tool-btn .material-symbols-outlined { font-size: 20px; }
+    .tool-btn.mini { width: 28px; height: 28px; }
+    .tool-btn.mini .material-symbols-outlined { font-size: 18px; }
+
+    .message-content-scroll { flex: 1; overflow-y: auto; }
+    .message-header-v2 { padding: 24px 32px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .subject-line { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .subject-line h1 { font-size: 22px; font-weight: 400; color: var(--text-primary); font-family: 'Inter', sans-serif; flex: 1; }
+    .icon-label { color: var(--text-muted); font-size: 20px; }
+    .folder-tag { background: #3c4043; color: #e8eaed; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 500; }
+
+    .sender-info-v2 { display: flex; gap: 12px; align-items: flex-start; }
+    .sender-avatar-v2 { width: 40px; height: 40px; border-radius: 50%; background: #5c6bc0; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
+    .meta-body { flex: 1; }
+    .meta-row-1 { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .sender-name { font-weight: 700; font-size: 14px; }
+    .sender-email { color: var(--text-secondary); font-size: 12px; }
+    .message-date { font-size: 12px; color: var(--text-secondary); margin-right: 12px; }
+    .meta-actions { display: flex; gap: 4px; }
+    .meta-row-2 { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+
+    .message-body-v2 { padding: 32px; max-width: 900px; }
+    .html-content-v2 { background: #fff; color: #000; padding: 24px; border-radius: 8px; min-height: 200px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .reply-placeholder { margin-top: 32px; display: flex; gap: 12px; }
+
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 1000; display: flex; align-items: center; justify-content: center; }
     .modal { width: 500px; padding: 32px; }
     .modal h2 { margin-bottom: 24px; color: var(--accent-gold); font-size: 18px; text-transform: uppercase; letter-spacing: 2px; }
