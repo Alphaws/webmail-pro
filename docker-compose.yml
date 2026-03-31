@@ -44,7 +44,7 @@ services:
       - webmail-server
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.webmail-pro.rule=Host(\`\${WEBMAIL_DOMAIN}\`)"
+      - "traefik.http.routers.webmail-pro.rule=Host(\${WEBMAIL_DOMAIN})"
       - "traefik.http.routers.webmail-pro.entrypoints=websecure"
       - "traefik.http.routers.webmail-pro.tls=true"
       - "traefik.http.routers.webmail-pro.tls.certresolver=myresolver"
