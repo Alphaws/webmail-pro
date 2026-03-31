@@ -76,7 +76,7 @@ import { FormsModule } from '@angular/forms';
           *ngFor="let msg of messages" 
           class="email-item"
           [class.active]="selectedMessage?.uid === msg.uid"
-          [class.unread]="!msg.flags?.includes('\\\\Seen')"
+          [class.unread]="!hasFlag(msg, '\\\\Seen')"
           (click)="selectMessage(msg)"
         >
           <div class="email-header">
@@ -105,8 +105,8 @@ import { FormsModule } from '@angular/forms';
           </div>
           <div class="tool-divider"></div>
           <div class="tool-group">
-            <button class="tool-btn" [title]="selectedMessage.flags?.includes('\\\\Seen') ? 'Mark as unread' : 'Mark as read'" (click)="toggleSeen(selectedMessage.uid, !selectedMessage.flags?.includes('\\\\Seen'))">
-              <span class="material-symbols-outlined">{{ selectedMessage.flags?.includes('\\\\Seen') ? 'mark_as_unread' : 'drafts' }}</span>
+            <button class="tool-btn" [title]="hasFlag(selectedMessage, '\\\\Seen') ? 'Mark as unread' : 'Mark as read'" (click)="toggleSeen(selectedMessage.uid, !hasFlag(selectedMessage, '\\\\Seen'))">
+              <span class="material-symbols-outlined">{{ hasFlag(selectedMessage, '\\\\Seen') ? 'mark_as_unread' : 'drafts' }}</span>
             </button>
             <button class="tool-btn" title="Move to"><span class="material-symbols-outlined">drive_file_move</span></button>
             <button class="tool-btn" title="Labels"><span class="material-symbols-outlined">label</span></button>
@@ -419,7 +419,7 @@ export class DashboardComponent implements OnInit {
   selectMessage(msg: any) {
     this.selectedMessage = msg;
     this.loadMessageBody(msg.uid);
-    if (!msg.flags?.includes('\\\\Seen')) {
+    if (!this.hasFlag(msg, '\\\\Seen')) {
       this.toggleSeen(msg.uid, true);
     }
     this.cdr.detectChanges();
@@ -490,6 +490,11 @@ export class DashboardComponent implements OnInit {
         this.cdr.detectChanges();
       }
     });
+  }
+
+  hasFlag(msg: any, flag: string): boolean {
+    if (!msg || !msg.flags) return false;
+    return Array.isArray(msg.flags) && msg.flags.includes(flag);
   }
 
   deleteMessage(uid: string) {

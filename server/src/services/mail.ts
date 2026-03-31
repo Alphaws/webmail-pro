@@ -23,9 +23,13 @@ export class MailService {
       const start = Math.max(1, end - 19);
       
       for await (let message of client.fetch(`${start}:${end}`, { envelope: true, flags: true, size: true })) {
-        const serializedMessage = JSON.parse(JSON.stringify(message, (key, value) =>
-          typeof value === 'bigint' ? value.toString() : value
-        ));
+        // imapflow returns flags as a Set and modseq as BigInt
+        // We must convert them for JSON serialization
+        const serializedMessage = {
+          ...message,
+          flags: message.flags ? Array.from(message.flags) : [],
+          modseq: message.modseq ? message.modseq.toString() : undefined
+        };
         messages.push(serializedMessage);
       }
       return messages.reverse();
@@ -70,7 +74,6 @@ export class MailService {
     const client = await ImapPool.getClient(accountId, vaultKey);
     const lock = await client.getMailboxLock(folder);
     try {
-      // Find Archive folder
       const folders = await client.list();
       const archiveFolder = folders.find(f => f.path.toLowerCase().includes('archive')) || 
                             folders.find(f => f.path.toLowerCase().includes('archivum'));
