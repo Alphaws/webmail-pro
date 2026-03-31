@@ -419,7 +419,6 @@ export class DashboardComponent implements OnInit {
   selectMessage(msg: any) {
     this.selectedMessage = msg;
     this.loadMessageBody(msg.uid);
-    // Auto mark as read if unread
     if (!msg.flags?.includes('\\\\Seen')) {
       this.toggleSeen(msg.uid, true);
     }
@@ -493,8 +492,6 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  // --- MAIL OPERATIONS ---
-
   deleteMessage(uid: string) {
     if (!confirm('Move transmission to trash?')) return;
     const vaultKey = sessionStorage.getItem('vault_key');
@@ -531,7 +528,6 @@ export class DashboardComponent implements OnInit {
       uid,
       seen
     }, { headers: this.getHeaders() }).subscribe(() => {
-      // Update local state without full reload
       const msg = this.messages.find(m => m.uid === uid);
       if (msg) {
         if (!msg.flags) msg.flags = [];
@@ -551,7 +547,7 @@ export class DashboardComponent implements OnInit {
     this.loadingBody = true;
     this.safeBody = '';
     const vaultKey = sessionStorage.getItem('vault_key');
-    this.http.get<any>(\`/api/mail/body?accountId=\${this.selectedAccount.id}&vaultKey=\${vaultKey}&folder=\${this.selectedFolder}&uid=\${uid}\`, { headers: this.getHeaders() })
+    this.http.get<any>(`/api/mail/body?accountId=${this.selectedAccount.id}&vaultKey=${vaultKey}&folder=${this.selectedFolder}&uid=${uid}`, { headers: this.getHeaders() })
       .subscribe({
         next: (data) => {
           this.safeBody = this.sanitizer.bypassSecurityTrustHtml(data.html || data.text);
