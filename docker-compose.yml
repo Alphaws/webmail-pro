@@ -1,0 +1,61 @@
+services:
+  webmail-db:
+    image: postgres:16-alpine
+    container_name: webmail-db
+    restart: unless-stopped
+    networks:
+      - webmail-net
+    volumes:
+      - webmail-db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=\${DB_USER}
+      - POSTGRES_PASSWORD=\${DB_PASSWORD}
+      - POSTGRES_DB=\${DB_NAME}
+
+  webmail-server:
+    build: ./server
+    container_name: webmail-server
+    restart: unless-stopped
+    networks:
+      - webmail-net
+      - traefik
+    depends_on:
+      - webmail-db
+    volumes:
+      - ./server/src/database:/app/src/database
+    environment:
+      - NODE_ENV=\${NODE_ENV}
+      - PORT=\${PORT}
+      - JWT_SECRET=\${JWT_SECRET}
+      - DB_CLIENT=\${DB_CLIENT}
+      - DB_HOST=\${DB_HOST}
+      - DB_USER=\${DB_USER}
+      - DB_PASSWORD=\${DB_PASSWORD}
+      - DB_NAME=\${DB_NAME}
+
+  webmail-client:
+    build: ./client
+    container_name: webmail-client
+    restart: unless-stopped
+    networks:
+      - webmail-net
+      - traefik
+    depends_on:
+      - webmail-server
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webmail-pro.rule=Host(\`\${WEBMAIL_DOMAIN}\`)"
+      - "traefik.http.routers.webmail-pro.entrypoints=websecure"
+      - "traefik.http.routers.webmail-pro.tls=true"
+      - "traefik.docker.network=traefik"
+    environment:
+      - BACKEND_URL=http://webmail-server:3000
+
+networks:
+  webmail-net:
+  traefik:
+    external: true
+    name: traefik
+
+volumes:
+  webmail-db-data:
