@@ -17,7 +17,7 @@ import { Router } from '@angular/router';
         </div>
         <p class="subtitle">Concurrent Intelligence Platform</p>
         
-        <form (submit)="onLogin()">
+        <form (submit)="onLogin()" *ngIf="!isRecovering">
           <div class="input-group">
             <label for="username">Operator Identity</label>
             <input type="text" id="username" name="username" [(ngModel)]="username" placeholder="Username" required>
@@ -32,6 +32,35 @@ import { Router } from '@angular/router';
           </button>
           
           <p class="error-msg" *ngIf="error">{{ error }}</p>
+
+          <p style="margin-top: 24px; font-size: 11px; color: var(--text-secondary); cursor: pointer;" (click)="isRecovering = true">
+            Forgot Master Key? Use Recovery Phrase
+          </p>
+        </form>
+
+        <form (submit)="onRecover()" *ngIf="isRecovering">
+          <div class="input-group">
+            <label for="rec-username">Operator Identity</label>
+            <input type="text" id="rec-username" name="username" [(ngModel)]="username" placeholder="Username" required>
+          </div>
+          <div class="input-group">
+            <label for="phrase">24-Word Recovery Phrase</label>
+            <textarea id="phrase" name="phrase" [(ngModel)]="recoveryPhrase" placeholder="word1 word2 ... word24" required style="width: 100%; height: 80px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-milled); border-radius: 4px; color: #fff; padding: 12px; outline: none;"></textarea>
+          </div>
+          <div class="input-group">
+            <label for="new-pass">New Master Access Key</label>
+            <input type="password" id="new-pass" name="new_pass" [(ngModel)]="password" placeholder="••••••••" required>
+          </div>
+          
+          <button type="submit" class="milled-button login-btn" [disabled]="loading">
+            {{ loading ? 'Recovering...' : 'Restore Access' }}
+          </button>
+          
+          <p class="error-msg" *ngIf="error">{{ error }}</p>
+
+          <p style="margin-top: 24px; font-size: 11px; color: var(--text-secondary); cursor: pointer;" (click)="isRecovering = false">
+            Back to Login
+          </p>
         </form>
         
         <div class="footer-meta">
@@ -142,6 +171,8 @@ import { Router } from '@angular/router';
 export class LoginComponent {
   username = '';
   password = '';
+  recoveryPhrase = '';
+  isRecovering = false;
   loading = false;
   error = '';
 
@@ -162,6 +193,27 @@ export class LoginComponent {
       },
       error: (err) => {
         this.error = err.error.message || 'Authentication failed';
+        this.loading = false;
+      }
+    });
+  }
+
+  onRecover() {
+    this.loading = true;
+    this.error = '';
+    
+    this.http.post<any>('/api/auth/recover-vault', {
+      username: this.username,
+      mnemonic: this.recoveryPhrase,
+      newPassword: this.password
+    }).subscribe({
+      next: () => {
+        alert('Transmission vault recovered and re-keyed. You can now login.');
+        this.isRecovering = false;
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = err.error.message || 'Recovery failed';
         this.loading = false;
       }
     });

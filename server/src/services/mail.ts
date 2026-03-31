@@ -12,27 +12,66 @@ export class MailService {
   }
 
   static async listMessages(accountId: number, vaultKey: string, folder: string = 'INBOX'): Promise<any> {
+    // 1. Load from cache for "Instant Load"
+    const cachedMessages = await db('messages')
+      .where({ account_id: accountId, folder })
+      .orderBy('date', 'desc')
+      .limit(50);
+
+    // 2. Perform background sync (we do it inline for now but could be optimized)
     const client = await ImapPool.getClient(accountId, vaultKey);
     const lock = await client.getMailboxLock(folder);
     try {
       const mailbox = client.mailbox;
       if (mailbox === false || mailbox.exists === 0) {
-        return [];
+        return cachedMessages;
       }
 
-      const messages = [];
       const end = mailbox.exists;
-      const start = Math.max(1, end - 19);
+      const start = Math.max(1, end - 49); // Fetch last 50
       
+      const newMessages = [];
+      const imapUids = new Set<string>();
+
       for await (let message of client.fetch(`${start}:${end}`, { envelope: true, flags: true, size: true })) {
+        const uid = message.uid.toString();
+        imapUids.add(uid);
+
+        if (!message.envelope) continue;
+
         const serializedMessage = {
+          account_id: accountId,
+          folder: folder,
+          uid: uid,
+          message_id: message.envelope.messageId,
+          subject: message.envelope.subject,
+          from_name: message.envelope.from?.[0]?.name,
+          from_address: message.envelope.from?.[0]?.address,
+          date: message.envelope.date,
+          size: message.size,
+          flags: JSON.stringify(Array.from(message.flags || [])),
+          envelope: JSON.stringify(message.envelope),
+          modseq: message.modseq ? message.modseq.toString() : undefined
+        };
+        
+        // Upsert to cache
+        await db('messages')
+          .insert(serializedMessage)
+          .onConflict(['account_id', 'folder', 'uid'])
+          .merge();
+
+        newMessages.push({
           ...message,
           flags: message.flags ? Array.from(message.flags) : [],
           modseq: message.modseq ? message.modseq.toString() : undefined
-        };
-        messages.push(serializedMessage);
+        });
       }
-      return messages.reverse();
+
+      // Cleanup: remove messages that are in cache but not in the last 50 from IMAP
+      // Actually, we should only remove those that are really gone, but for simplicity:
+      // if (cachedMessages.length > 0) { ... }
+
+      return newMessages.reverse();
     } finally {
       lock.release();
     }
@@ -55,7 +94,40 @@ export class MailService {
         from: parsed.from?.text,
         date: parsed.date,
         messageId: parsed.messageId,
-        references: parsed.references
+        references: parsed.references,
+        attachments: parsed.attachments.map(att => ({
+          filename: att.filename,
+          contentType: att.contentType,
+          size: att.size,
+          contentId: att.contentId,
+          checksum: att.checksum
+        }))
+      };
+    } finally {
+      lock.release();
+    }
+  }
+
+  static async getAttachment(accountId: number, vaultKey: string, folder: string, uid: string, filename: string, checksum: string): Promise<any> {
+    const client = await ImapPool.getClient(accountId, vaultKey);
+    const lock = await client.getMailboxLock(folder);
+    try {
+      const message = await client.fetchOne(uid, { source: true }, { uid: true });
+      if (!message || !message.source) {
+        throw new Error('Message source not found');
+      }
+
+      const parsed = await simpleParser(message.source);
+      const attachment = parsed.attachments.find(att => att.filename === filename && att.checksum === checksum);
+      
+      if (!attachment) {
+        throw new Error('Attachment not found');
+      }
+
+      return {
+        content: attachment.content,
+        contentType: attachment.contentType,
+        filename: attachment.filename
       };
     } finally {
       lock.release();
@@ -106,7 +178,7 @@ export class MailService {
     }
   }
 
-  static async sendMail(accountId: number, vaultKey: string, to: string, subject: string, body: string, inReplyTo?: string, references?: string | string[]): Promise<any> {
+  static async sendMail(accountId: number, vaultKey: string, to: string, subject: string, body: string, inReplyTo?: string, references?: string | string[], attachments?: any[]): Promise<any> {
     const account = await db('accounts').where({ id: accountId }).first();
     if (!account) throw new Error('Account not found');
 
@@ -132,7 +204,11 @@ export class MailService {
       html: body,
       text: body.replace(/<[^>]*>?/gm, ''),
       inReplyTo,
-      references
+      references,
+      attachments: attachments?.map(att => ({
+        filename: att.filename,
+        content: Buffer.from(att.content, 'base64')
+      }))
     });
 
     return info;

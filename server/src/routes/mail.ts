@@ -7,6 +7,7 @@ const router = Router();
 router.get('/folders', authMiddleware, MailController.folders);
 router.get('/messages', authMiddleware, MailController.messages);
 router.get('/body', authMiddleware, MailController.body);
+router.get('/attachment', authMiddleware, MailController.attachment);
 
 router.post('/delete', authMiddleware, MailController.delete);
 router.post('/archive', authMiddleware, MailController.archive);

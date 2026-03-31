@@ -1,9 +1,11 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
+import { io, Socket } from 'socket.io-client';
+import CryptoJS from 'crypto-js';
 
 @Component({
   selector: 'app-dashboard',
@@ -14,27 +16,38 @@ import { FormsModule } from '@angular/forms';
     <aside class="account-sidebar">
       <div 
         *ngFor="let acc of accounts" 
-        class="account-icon" 
+        class="account-item" 
         [class.active]="selectedAccount?.id === acc.id"
         (click)="selectAccount(acc)"
         (contextmenu)="onAccountContextMenu($event, acc)"
-        [title]="acc.email"
       >
-        {{ acc.email[0].toUpperCase() }}
+        <div class="account-icon-container">
+          <img [src]="getGravatarUrl(acc.email)" class="account-gravatar" alt="Avatar">
+        </div>
+        <span class="account-full-email">{{ acc.email }}</span>
       </div>
       
-      <div class="account-icon add-btn" (click)="showAddModal = true" title="Connect New Account">
-        <span class="material-symbols-outlined">add</span>
+      <div class="account-item add-btn" (click)="showAddModal = true">
+        <div class="account-icon-container">
+          <span class="material-symbols-outlined">add</span>
+        </div>
+        <span class="account-full-email">Connect Identity</span>
       </div>
 
       <div style="flex: 1"></div>
 
-      <div class="account-icon" (click)="showSecurityModal = true" title="Master Security Settings">
-        <span class="material-symbols-outlined">shield</span>
+      <div class="account-item" (click)="showSecurityModal = true">
+        <div class="account-icon-container">
+          <span class="material-symbols-outlined">shield</span>
+        </div>
+        <span class="account-full-email">Security</span>
       </div>
 
-      <div class="account-icon" (click)="logout()" title="Logout">
-        <span class="material-symbols-outlined">logout</span>
+      <div class="account-item" (click)="logout()">
+        <div class="account-icon-container">
+          <span class="material-symbols-outlined">logout</span>
+        </div>
+        <span class="account-full-email">Logout</span>
       </div>
     </aside>
 
@@ -159,6 +172,25 @@ import { FormsModule } from '@angular/forms';
           <article class="message-body-v2" *ngIf="!loadingBody">
             <div [innerHTML]="safeBody" class="html-content-v2"></div>
             
+            <div class="attachments-section" *ngIf="selectedMessageBody?.attachments?.length > 0">
+              <div class="attachments-header">
+                <span class="material-symbols-outlined">attach_file</span>
+                {{ selectedMessageBody.attachments.length }} Attachments
+              </div>
+              <div class="attachments-grid">
+                <div class="attachment-card" *ngFor="let att of selectedMessageBody.attachments" (click)="downloadAttachment(att)">
+                  <span class="material-symbols-outlined attachment-icon">draft</span>
+                  <div class="attachment-info">
+                    <span class="attachment-name">{{ att.filename }}</span>
+                    <span class="attachment-size">{{ att.size | number }} bytes</span>
+                  </div>
+                  <button class="attachment-download">
+                    <span class="material-symbols-outlined">download</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div class="reply-placeholder">
               <button class="milled-button" (click)="reply()"><span class="material-symbols-outlined">reply</span> Reply</button>
               <button class="milled-button" style="margin-left: 12px;" (click)="forward()"><span class="material-symbols-outlined">forward</span> Forward</button>
@@ -208,11 +240,23 @@ import { FormsModule } from '@angular/forms';
           <input type="text" [(ngModel)]="composeData.subject" placeholder="Subject">
         </div>
         <textarea [(ngModel)]="composeData.body" placeholder="Establish connection message..."></textarea>
+        
+        <div class="compose-attachments" *ngIf="composeData.attachments.length > 0">
+          <div class="attachment-pill" *ngFor="let att of composeData.attachments; let i = index">
+            <span class="material-symbols-outlined">attach_file</span>
+            <span class="pill-name">{{ att.filename }}</span>
+            <span class="pill-remove" (click)="removeAttachment(i)">&times;</span>
+          </div>
+        </div>
       </div>
       <div class="compose-footer">
         <button class="milled-button primary-btn" [disabled]="sending" (click)="sendMail()">
           {{ sending ? 'TRANSMITTING...' : 'SEND' }}
         </button>
+        <button class="tool-btn" style="margin-left: 8px;" (click)="fileInput.click()" title="Attach File">
+          <span class="material-symbols-outlined">attach_file</span>
+        </button>
+        <input type="file" #fileInput style="display: none" (change)="handleFileUpload($event)" multiple>
         <div style="flex: 1"></div>
         <button class="tool-btn" (click)="showCompose = false"><span class="material-symbols-outlined">delete</span></button>
       </div>
@@ -305,91 +349,31 @@ import { FormsModule } from '@angular/forms';
             </button>
           </div>
         </form>
+
+        <div class="recovery-section" style="margin-top: 40px; padding-top: 24px; border-top: 1px dashed var(--border-milled);">
+          <h3 style="font-size: 14px; color: var(--accent-gold); margin-bottom: 8px;">Emergency Recovery</h3>
+          <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 16px;">Generate a 24-word recovery phrase to access your transmissions if you forget your Master Key.</p>
+          
+          <button class="milled-button" (click)="generateRecovery()" *ngIf="!recoveryMnemonic" [disabled]="securityLoading">
+            <span class="material-symbols-outlined">key</span> Generate Recovery Phrase
+          </button>
+
+          <div class="mnemonic-display" *ngIf="recoveryMnemonic">
+            <p style="color: #f87171; font-weight: 700; margin-bottom: 12px; font-size: 11px;">SAVE THIS SECURELY. IT WILL NOT BE SHOWN AGAIN.</p>
+            <div class="mnemonic-grid">
+              <div class="mnemonic-word" *ngFor="let word of recoveryMnemonic.split(' '); let i = index">
+                <span class="word-num">{{ i + 1 }}</span> {{ word }}
+              </div>
+            </div>
+            <button class="milled-button" style="margin-top: 16px;" (click)="recoveryMnemonic = ''">I have saved it</button>
+          </div>
+        </div>
       </div>
     </div>
   `,
-  styles: [`
-    :host { display: flex; height: 100vh; width: 100vw; }
-    .account-sidebar { width: 64px; background: #000; display: flex; flex-direction: column; align-items: center; padding-top: 20px; border-right: 1px solid var(--border-milled); z-index: 100; }
-    .account-icon { width: 40px; height: 40px; border-radius: 8px; background: var(--bg-container); border: 1px solid var(--border-milled); margin-bottom: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; color: var(--text-secondary); font-weight: 700; font-size: 14px; }
-    .account-icon.active { border-color: var(--accent-gold); color: var(--accent-gold); box-shadow: 0 0 10px var(--border-glow); }
-    .account-icon.add-btn { border-style: dashed; opacity: 0.5; }
-    .account-icon:hover { border-color: var(--accent-gold-muted); transform: scale(1.05); opacity: 1; }
-    .folder-sidebar { width: 240px; background: var(--bg-sidebar); border-right: 1px solid var(--border-milled); display: flex; flex-direction: column; }
-    .sidebar-header { padding: 24px; font-weight: 800; letter-spacing: 2px; color: var(--accent-gold); text-transform: uppercase; font-size: 12px; }
-    .sidebar-actions { padding: 0 16px 24px 16px; }
-    .compose-btn { width: 100%; padding: 14px; background: var(--bg-container); border-color: var(--accent-gold-muted); color: var(--accent-gold); font-size: 11px; letter-spacing: 2px; }
-    .compose-btn:hover { background: var(--bg-hover); border-color: var(--accent-gold); }
-    .sidebar-footer { padding: 16px; border-top: 1px solid var(--border-milled); }
-    .nav-list { flex: 1; overflow-y: auto; }
-    .nav-item { padding: 12px 24px; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; gap: 12px; font-size: 13px; transition: all 0.2s; }
-    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
-    .nav-item.active { color: var(--accent-gold); border-right: 2px solid var(--accent-gold); background: linear-gradient(90deg, transparent, rgba(242, 202, 80, 0.05)); }
-    .nav-item.loading { opacity: 0.5; cursor: default; }
-    .nav-item.error-state { color: #f87171; }
-    .inbox-list { width: 380px; border-right: 1px solid var(--border-milled); display: flex; flex-direction: column; background: rgba(15, 15, 15, 0.5); }
-    .search-bar { padding: 16px; border-bottom: 1px solid var(--border-milled); }
-    .search-input { width: 100%; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-milled); border-radius: 4px; padding: 10px 12px; color: var(--text-primary); font-size: 13px; outline: none; }
-    .scroll-area { flex: 1; overflow-y: auto; }
-    .email-item { padding: 16px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.03); cursor: pointer; transition: all 0.2s; }
-    .email-item:hover { background: rgba(255, 255, 255, 0.02); }
-    .email-item.active { background: var(--bg-hover); border-left: 3px solid var(--accent-gold); }
-    .email-item.unread { border-left: 3px solid var(--accent-gold); }
-    .email-item.unread .email-sender { color: var(--text-primary); font-weight: 800; }
-    .email-item.unread .email-subject { color: var(--text-primary); font-weight: 600; }
-    .email-item.error { color: #f87171; text-align: center; font-size: 11px; }
-    .email-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
-    .email-sender { font-weight: 600; font-size: 13px; color: var(--text-secondary); }
-    .email-time { font-size: 11px; color: var(--text-muted); }
-    .email-subject { font-size: 13px; color: var(--accent-gold-muted); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .email-preview { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .message-view { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); overflow: hidden; }
-    .message-toolbar { height: 48px; border-bottom: 1px solid var(--border-milled); display: flex; align-items: center; padding: 0 16px; gap: 8px; background: rgba(0,0,0,0.2); }
-    .tool-group { display: flex; align-items: center; gap: 4px; }
-    .tool-divider { width: 1px; height: 20px; background: var(--border-milled); margin: 0 8px; }
-    .tool-btn { background: transparent; border: none; color: var(--text-secondary); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; }
-    .tool-btn:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
-    .tool-btn .material-symbols-outlined { font-size: 20px; }
-    .tool-btn.mini { width: 28px; height: 28px; }
-    .tool-btn.mini .material-symbols-outlined { font-size: 18px; }
-    .message-content-scroll { flex: 1; overflow-y: auto; }
-    .message-header-v2 { padding: 24px 32px; border-bottom: 1px solid rgba(255,255,255,0.03); }
-    .subject-line { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-    .subject-line h1 { font-size: 22px; font-weight: 400; color: var(--text-primary); font-family: 'Inter', sans-serif; flex: 1; }
-    .icon-label { color: var(--text-muted); font-size: 20px; }
-    .folder-tag { background: #3c4043; color: #e8eaed; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 500; }
-    .sender-info-v2 { display: flex; gap: 12px; align-items: flex-start; }
-    .sender-avatar-v2 { width: 40px; height: 40px; border-radius: 50%; background: #5c6bc0; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
-    .meta-body { flex: 1; }
-    .meta-row-1 { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .sender-name { font-weight: 700; font-size: 14px; }
-    .sender-email { color: var(--text-secondary); font-size: 12px; }
-    .message-date { font-size: 12px; color: var(--text-secondary); margin-right: 12px; }
-    .meta-actions { display: flex; gap: 4px; }
-    .meta-row-2 { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
-    .message-body-v2 { padding: 32px; max-width: 900px; }
-    .html-content-v2 { background: #fff; color: #000; padding: 24px; border-radius: 8px; min-height: 200px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-    .reply-placeholder { margin-top: 32px; display: flex; gap: 12px; }
-    .compose-modal { position: fixed; bottom: 0; right: 80px; width: 500px; height: 600px; background: #1a1a1a; border: 1px solid var(--border-milled); border-radius: 12px 12px 0 0; z-index: 2000; display: flex; flex-direction: column; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
-    .compose-header { padding: 12px 16px; background: #000; border-radius: 12px 12px 0 0; display: flex; align-items: center; font-size: 13px; font-weight: 700; color: var(--accent-gold); letter-spacing: 1px; }
-    .compose-body { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
-    .compose-row { border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .compose-row input { width: 100%; background: transparent; border: none; padding: 12px 0; color: #fff; outline: none; }
-    .compose-body textarea { flex: 1; background: transparent; border: none; color: #fff; outline: none; resize: none; font-size: 14px; line-height: 1.6; padding-top: 16px; }
-    .compose-footer { padding: 16px; display: flex; align-items: center; border-top: 1px solid rgba(255,255,255,0.05); }
-    .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 1000; display: flex; align-items: center; justify-content: center; }
-    .modal { width: 500px; padding: 32px; }
-    .modal h2 { margin-bottom: 24px; color: var(--accent-gold); font-size: 18px; text-transform: uppercase; letter-spacing: 2px; }
-    .form-row { display: flex; gap: 16px; margin-bottom: 16px; }
-    .input-group { flex: 1; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-    .input-group label { font-size: 10px; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 1px; }
-    .modal input { background: rgba(0,0,0,0.3); border: 1px solid var(--border-milled); border-radius: 4px; padding: 10px; color: #fff; outline: none; }
-    .modal-actions { display: flex; gap: 12px; margin-top: 24px; }
-    .primary-btn { background: var(--accent-gold); color: #000; border: none; }
-    .detail-empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; flex-direction: column; }
-  `]
+  styleUrls: ['./dashboard.css']
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, OnDestroy {
   accounts: any[] = [];
   selectedAccount: any = null;
   folders: any[] = [];
@@ -409,17 +393,84 @@ export class DashboardComponent implements OnInit {
   securityLoading = false;
   securityError = '';
   securityForm = { oldPassword: '', newPassword: '', confirmPassword: '' };
+  recoveryMnemonic = '';
   showCompose = false;
   sending = false;
-  composeData: any = { to: '', subject: '', body: '', inReplyTo: undefined, references: undefined };
+  composeData: any = { to: '', subject: '', body: '', inReplyTo: undefined, references: undefined, attachments: [] };
+
+  private socket: Socket | null = null;
 
   constructor(private http: HttpClient, private router: Router, private cdr: ChangeDetectorRef, private sanitizer: DomSanitizer) {}
 
-  ngOnInit() { this.loadAccounts(); }
+  ngOnInit() { 
+    this.loadAccounts();
+    this.initSocket();
+  }
+
+  ngOnDestroy() {
+    if (this.socket) this.socket.disconnect();
+  }
+
+  initSocket() {
+    this.socket = io();
+    
+    this.socket.on('connect', () => {
+      console.log('Connected to WebSocket server');
+      if (this.selectedAccount) {
+        this.socket?.emit('join-account', this.selectedAccount.id);
+      }
+    });
+
+    this.socket.on('mailbox-update', (data: any) => {
+      console.log('IMAP PUSH: Mailbox update', data);
+      if (this.selectedAccount && this.selectedFolder === data.folder) {
+        this.loadMessages(this.selectedAccount.id, this.selectedFolder);
+      }
+    });
+
+    this.socket.on('message-update', (data: any) => {
+      console.log('IMAP PUSH: Message update', data);
+      const msg = this.messages.find(m => m.uid === data.uid);
+      if (msg) {
+        msg.flags = data.flags;
+        this.cdr.detectChanges();
+      }
+    });
+  }
 
   getHeaders() {
     const token = localStorage.getItem('webmail_token');
     return new HttpHeaders().set('Authorization', 'Bearer ' + token);
+  }
+
+  getGravatarUrl(email: string): string {
+    const hash = CryptoJS.MD5(email.trim().toLowerCase()).toString();
+    return `https://www.gravatar.com/avatar/${hash}?s=80&d=identicon`;
+  }
+
+  handleFileUpload(event: any) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const reader = new FileReader();
+      reader.onload = (e: any) => {
+        const content = e.target.result.split(',')[1];
+        this.composeData.attachments.push({
+          filename: file.name,
+          content: content,
+          size: file.size
+        });
+        this.cdr.detectChanges();
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  removeAttachment(idx: number) {
+    this.composeData.attachments.splice(idx, 1);
+    this.cdr.detectChanges();
   }
 
   loadAccounts() {
@@ -441,6 +492,9 @@ export class DashboardComponent implements OnInit {
     this.selectedMessage = null;
     this.syncError = false;
     this.loadFolders(account.id);
+    if (this.socket) {
+      this.socket.emit('join-account', account.id);
+    }
     this.cdr.detectChanges();
   }
 
@@ -537,8 +591,26 @@ export class DashboardComponent implements OnInit {
     });
   }
 
+  generateRecovery() {
+    this.securityLoading = true;
+    const vaultKey = sessionStorage.getItem('vault_key');
+    this.http.post<any>('/api/auth/generate-recovery', { vaultKey }, { headers: this.getHeaders() })
+      .subscribe({
+        next: (res) => {
+          this.recoveryMnemonic = res.mnemonic;
+          this.securityLoading = false;
+          this.cdr.detectChanges();
+        },
+        error: (err) => {
+          alert('Failed to generate recovery: ' + (err.error?.message || 'Unknown error'));
+          this.securityLoading = false;
+          this.cdr.detectChanges();
+        }
+      });
+  }
+
   openCompose() {
-    this.composeData = { to: '', subject: '', body: '', inReplyTo: undefined, references: undefined };
+    this.composeData = { to: '', subject: '', body: '', inReplyTo: undefined, references: undefined, attachments: [] };
     this.showCompose = true;
     this.cdr.detectChanges();
   }
@@ -552,7 +624,8 @@ export class DashboardComponent implements OnInit {
       subject: 'Re: ' + this.selectedMessage.envelope.subject,
       body: '\\n\\nOn ' + new Date(this.selectedMessage.envelope.date).toLocaleString() + ', ' + this.selectedMessage.envelope.from[0].address + ' wrote:\\n' + quoted,
       inReplyTo: this.selectedMessageBody.messageId,
-      references: (this.selectedMessageBody.references || []).concat(this.selectedMessageBody.messageId)
+      references: (this.selectedMessageBody.references || []).concat(this.selectedMessageBody.messageId),
+      attachments: []
     };
     this.showCompose = true;
     this.cdr.detectChanges();
@@ -566,7 +639,8 @@ export class DashboardComponent implements OnInit {
       subject: 'Fwd: ' + this.selectedMessage.envelope.subject,
       body: '\\n\\n--- Forwarded Message ---\\nFrom: ' + this.selectedMessage.envelope.from[0].address + '\\nDate: ' + new Date(this.selectedMessage.envelope.date).toLocaleString() + '\\nSubject: ' + this.selectedMessage.envelope.subject + '\\n\\n' + body,
       inReplyTo: undefined,
-      references: undefined
+      references: undefined,
+      attachments: []
     };
     this.showCompose = true;
     this.cdr.detectChanges();
@@ -671,6 +745,25 @@ export class DashboardComponent implements OnInit {
       });
   }
 
+  downloadAttachment(att: any) {
+    const vaultKey = sessionStorage.getItem('vault_key');
+    const url = `/api/mail/attachment?accountId=${this.selectedAccount.id}&vaultKey=${vaultKey}&folder=${this.selectedFolder}&uid=${this.selectedMessage.uid}&filename=${encodeURIComponent(att.filename)}&checksum=${att.checksum}`;
+    
+    this.http.get(url, { headers: this.getHeaders(), responseType: 'blob' }).subscribe({
+      next: (blob: Blob) => {
+        const a = document.createElement('a');
+        const objectUrl = URL.createObjectURL(blob);
+        a.href = objectUrl;
+        a.download = att.filename;
+        a.click();
+        URL.revokeObjectURL(objectUrl);
+      },
+      error: (err) => {
+        alert('Failed to download attachment: ' + (err.error?.message || 'Unknown error'));
+      }
+    });
+  }
+
   getFolderIcon(path: string): string {
     const p = path.toLowerCase();
     if (p.includes('inbox')) return 'inbox';
@@ -710,7 +803,21 @@ export class DashboardComponent implements OnInit {
     this.loadingMessages = true;
     this.messages = [];
     const vaultKey = sessionStorage.getItem('vault_key');
-    this.http.get<any[]>('/api/mail/messages?accountId=' + accountId + '&vaultKey=' + vaultKey + '&folder=' + folder, { headers: this.getHeaders() })
+    const token = this.getHeaders();
+    
+    // 1. Fetch cached messages
+    this.http.get<any[]>(`/api/mail/messages?accountId=${accountId}&vaultKey=${vaultKey}&folder=${folder}&cached=true`, { headers: token })
+      .subscribe({
+        next: (data) => {
+          if (this.messages.length === 0) { // Only update if IMAP sync hasn't finished already
+            this.messages = data;
+            this.cdr.detectChanges();
+          }
+        }
+      });
+
+    // 2. Perform sync
+    this.http.get<any[]>(`/api/mail/messages?accountId=${accountId}&vaultKey=${vaultKey}&folder=${folder}`, { headers: token })
       .subscribe({
         next: (data) => {
           this.messages = data;

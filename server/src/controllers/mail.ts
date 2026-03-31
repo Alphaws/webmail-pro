@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { MailService } from '../services/mail';
+import db from '../database/db';
 
 export class MailController {
   static async folders(req: Request, res: Response): Promise<any> {
@@ -17,10 +18,27 @@ export class MailController {
   }
 
   static async messages(req: Request, res: Response): Promise<any> {
-    const { accountId, vaultKey, folder } = req.query;
+    const { accountId, vaultKey, folder, cached } = req.query;
     if (!accountId || !vaultKey) return res.status(400).json({ message: 'accountId and vaultKey required' });
 
     try {
+      if (cached === 'true') {
+        const messages = await db('messages')
+          .where({ account_id: Number(accountId), folder: String(folder || 'INBOX') })
+          .orderBy('date', 'desc')
+          .limit(50);
+        
+        // Format for frontend
+        const formatted = messages.map((m: any) => ({
+          uid: m.uid,
+          envelope: m.envelope,
+          flags: m.flags,
+          size: m.size,
+          modseq: m.modseq
+        }));
+        return res.json(formatted);
+      }
+
       const messages = await MailService.listMessages(Number(accountId), String(vaultKey), String(folder || 'INBOX'));
       res.json(messages);
     } catch (error: any) {
@@ -40,6 +58,35 @@ export class MailController {
     } catch (error: any) {
       console.error('Body error:', error);
       if (error.authenticationFailed) return res.status(401).json({ message: 'IMAP Authentication failed' });
+      res.status(500).json({ message: error.message });
+    }
+  }
+
+  static async attachment(req: Request, res: Response): Promise<any> {
+    const { accountId, vaultKey, folder, uid, filename, checksum } = req.query;
+    if (!accountId || !vaultKey || !uid || !filename || !checksum) {
+      return res.status(400).json({ message: 'accountId, vaultKey, uid, filename and checksum required' });
+    }
+
+    try {
+      const attachment = await MailService.getAttachment(
+        Number(accountId), 
+        String(vaultKey), 
+        String(folder || 'INBOX'), 
+        String(uid), 
+        String(filename), 
+        String(checksum)
+      );
+
+      res.set({
+        'Content-Type': attachment.contentType,
+        'Content-Disposition': `attachment; filename="${attachment.filename}"`,
+        'Content-Length': attachment.content.length
+      });
+
+      res.send(attachment.content);
+    } catch (error: any) {
+      console.error('Attachment error:', error);
       res.status(500).json({ message: error.message });
     }
   }
@@ -91,11 +138,11 @@ export class MailController {
   }
 
   static async send(req: Request, res: Response): Promise<any> {
-    const { accountId, vaultKey, to, subject, body, inReplyTo, references } = req.body;
+    const { accountId, vaultKey, to, subject, body, inReplyTo, references, attachments } = req.body;
     if (!accountId || !vaultKey || !to) return res.status(400).json({ message: 'accountId, vaultKey and recipient (to) required' });
 
     try {
-      const info = await MailService.sendMail(Number(accountId), String(vaultKey), to, subject, body, inReplyTo, references);
+      const info = await MailService.sendMail(Number(accountId), String(vaultKey), to, subject, body, inReplyTo, references, attachments);
       res.json({ message: 'Email sent successfully', messageId: info.messageId });
     } catch (error: any) {
       console.error('Send mail error:', error);

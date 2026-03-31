@@ -19,6 +19,7 @@ services:
     networks:
       - webmail-net
       - traefik
+      - mail
     depends_on:
       - webmail-db
     volumes:
@@ -57,6 +58,8 @@ networks:
   traefik:
     external: true
     name: ${TRAEFIK_NETWORK}
+  mail:
+    external: true
 
 volumes:
   webmail-db-data:
